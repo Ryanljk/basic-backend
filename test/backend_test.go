@@ -20,16 +20,19 @@ import (
 
 func setupRouter(users *[]model.User) *gin.Engine {
 	gin.SetMode(gin.TestMode)
-	r := gin.Default()
+	router := gin.Default()
 	svc := service.NewBackendService(users, "../data/test_data.json")
 	controller := controller.NewBackendController(svc)
 
-	r.GET("/api/get/:id", controller.GetUser)
-	r.GET("/api/users", controller.GetAllUsers)
-	r.POST("/api/add", controller.AddUser)
-	r.DELETE("/api/delete/:id", controller.DeleteUser)
+	api := router.Group("/api")
+	{
+		api.GET("/", controller.GetAllUsers) //displays all users in JSON
+		api.GET("/:id", controller.GetUser) //displays only 1 user, search by ID
+		api.POST("/", controller.AddUser) //adds 1 user to json
+		api.DELETE("/:id", controller.DeleteUser) //delete 1 user, by ID
+	}
 
-	return r
+	return router
 }
 
 //helper function to verify that the hashed password matches the plaintext password 
@@ -55,7 +58,7 @@ func TestAddUser(t *testing.T) {
 	//valid input
 	payload := model.User{Email: "testadd@gmail.com", Password: "pass"}
 	data, _ := json.Marshal(payload)
-	req, _ := http.NewRequest("POST", "/api/add", bytes.NewBuffer(data))
+	req, _ := http.NewRequest("POST", "/api/", bytes.NewBuffer(data))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
@@ -67,7 +70,7 @@ func TestAddUser(t *testing.T) {
 	assert.Equal(t, true, verifyPassword(users[0].Password, "pass")) //ensure that plaintext password matches hashed
 
 	//duplicate email
-	req2, _ := http.NewRequest("POST", "/api/add", bytes.NewBuffer(data))
+	req2, _ := http.NewRequest("POST", "/api/", bytes.NewBuffer(data))
 	req2.Header.Set("Content-Type", "application/json")
 	w2 := httptest.NewRecorder()
 	r.ServeHTTP(w2, req2)
@@ -76,7 +79,7 @@ func TestAddUser(t *testing.T) {
 	//missing parameter
 	payload2 := model.User{Password: "pass"}
 	data2, _ := json.Marshal(payload2)
-	req3, _ := http.NewRequest("POST", "/api/add", bytes.NewBuffer(data2))
+	req3, _ := http.NewRequest("POST", "/api/", bytes.NewBuffer(data2))
 	req3.Header.Set("Content-Type", "application/json")
 	w3 := httptest.NewRecorder()
 	r.ServeHTTP(w3, req3)
@@ -85,7 +88,7 @@ func TestAddUser(t *testing.T) {
 	//invalid email
 	payload3 := model.User{Email: "hello"}
 	data3, _ := json.Marshal(payload3)
-	req4, _ := http.NewRequest("POST", "/api/add", bytes.NewBuffer(data3))
+	req4, _ := http.NewRequest("POST", "/api/", bytes.NewBuffer(data3))
 	req4.Header.Set("Content-Type", "application/json")
 	w4 := httptest.NewRecorder()
 	r.ServeHTTP(w4, req4)
@@ -99,7 +102,7 @@ func TestGetUser(t *testing.T) {
 	r := setupRouter(&users)
 
 	//valid input
-	req, _ := http.NewRequest("GET", "/api/get/1", nil)
+	req, _ := http.NewRequest("GET", "/api/1", nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
@@ -111,13 +114,13 @@ func TestGetUser(t *testing.T) {
 	assert.Equal(t, "pass", u.Password)
 
 	//user doesnt exist
-	req2, _ := http.NewRequest("GET", "/api/get/1000", nil)
+	req2, _ := http.NewRequest("GET", "/api/1000", nil)
 	w2 := httptest.NewRecorder()
 	r.ServeHTTP(w2, req2)
 	assert.Equal(t, 404, w2.Code)
 
 	//invalid id
-	req3, _ := http.NewRequest("GET", "/api/get/abc", nil)
+	req3, _ := http.NewRequest("GET", "/api/abc", nil)
 	w3 := httptest.NewRecorder()
 	r.ServeHTTP(w3, req3)
 	assert.Equal(t, 400, w3.Code)
@@ -130,20 +133,20 @@ func TestDeleteUser(t *testing.T) {
 	r := setupRouter(&users)
 
 	//valid input
-	req, _ := http.NewRequest("DELETE", "/api/delete/1", nil)
+	req, _ := http.NewRequest("DELETE", "/api/1", nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
 	assert.Len(t, users, 0)
 
 	//missing user
-	req2, _ := http.NewRequest("DELETE", "/api/delete/1000", nil)
+	req2, _ := http.NewRequest("DELETE", "/api/1000", nil)
 	w2 := httptest.NewRecorder()
 	r.ServeHTTP(w2, req2)
 	assert.Equal(t, 404, w2.Code)
 
 	//invalid id
-	req3, _ := http.NewRequest("DELETE", "/api/delete/abc", nil)
+	req3, _ := http.NewRequest("DELETE", "/api/abc", nil)
 	w3 := httptest.NewRecorder()
 	r.ServeHTTP(w3, req3)
 	assert.Equal(t, 400, w3.Code)
