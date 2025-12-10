@@ -7,6 +7,7 @@ import (
 	"github.com/Ryanljk/basic-backend/controller"
 	"github.com/Ryanljk/basic-backend/model"
 	"github.com/Ryanljk/basic-backend/service"
+	"github.com/Ryanljk/basic-backend/middleware"
 	"github.com/gin-gonic/gin"
 )
 
@@ -29,7 +30,7 @@ func loadJSON(path string) error {
 
 func main() {
 	gin.SetMode(gin.ReleaseMode)
-	server := gin.Default()
+	router := gin.Default()
 	port := os.Getenv("PORT")
 	filepath := os.Getenv("FILEPATH")
 
@@ -42,14 +43,17 @@ func main() {
 	service := service.NewBackendService(&users, filepath)
 	controller := controller.NewBackendController(service)
 
+	//load middleware
+	router.Use(middleware.Logger())
+
 	//define endpoints
-	api := server.Group("/api")
+	api := router.Group("/api")
 	{
 		api.GET("/", controller.GetAllUsers) //displays all users in JSON
-		api.GET("/get/:id", controller.GetUser) //displays only 1 user, search by ID
-		api.POST("/add", controller.AddUser) //adds 1 user to json
-		api.DELETE("/delete/:id", controller.DeleteUser) //
+		api.GET("/:id", controller.GetUser) //displays only 1 user, search by ID
+		api.POST("/", controller.AddUser) //adds 1 user to json
+		api.DELETE("/:id", controller.DeleteUser) //delete 1 user, by ID
 	}
 
-	server.Run(":" + port)
+	router.Run(":" + port)
 }
