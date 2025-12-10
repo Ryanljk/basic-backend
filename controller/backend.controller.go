@@ -55,7 +55,12 @@ func (bc *BackendController) AddUser(c *gin.Context) {
 
 	err := bc.Service.AddUser(req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		switch err.Error() {
+		case "invalid email", "email already exists":
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		}
 		return
 	}
 

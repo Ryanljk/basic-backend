@@ -2,16 +2,20 @@ package test
 
 import (
 	"bytes"
+	"crypto/subtle"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
+	"github.com/Ryanljk/basic-backend/controller"
 	"github.com/Ryanljk/basic-backend/model"
 	"github.com/Ryanljk/basic-backend/service"
-	"github.com/Ryanljk/basic-backend/controller"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
+	"golang.org/x/crypto/argon2"
 )
 
 func setupRouter(users *[]model.User) *gin.Engine {
@@ -26,6 +30,22 @@ func setupRouter(users *[]model.User) *gin.Engine {
 	r.DELETE("/api/delete/:id", controller.DeleteUser)
 
 	return r
+}
+
+//helper function to verify that the hashed password matches the plaintext password 
+func verifyPassword(encodedHash, password string) bool {
+	parts := strings.Split(encodedHash, "$")
+	if len(parts) != 2 {
+		return false
+	}
+	//decode salt & hash from base64
+	salt, err1 := base64.RawStdEncoding.DecodeString(parts[0])
+	hash, err2 := base64.RawStdEncoding.DecodeString(parts[1])
+	if err1 != nil || err2 != nil {
+		return false
+	}
+	newHash := argon2.IDKey([]byte(password), salt, 1, 64*1024, 4, 32)
+	return subtle.ConstantTimeCompare(hash, newHash) == 1
 }
 
 func TestAddUser(t *testing.T) {
@@ -44,14 +64,14 @@ func TestAddUser(t *testing.T) {
 	assert.Len(t, users, 1)
 	assert.Equal(t, "testadd@gmail.com", users[0].Email)
 	assert.Equal(t, 1, users[0].ID)
-	assert.Equal(t, "pass", users[0].Password)
+	assert.Equal(t, true, verifyPassword(users[0].Password, "pass")) //ensure that plaintext password matches hashed
 
 	//duplicate email
 	req2, _ := http.NewRequest("POST", "/api/add", bytes.NewBuffer(data))
 	req2.Header.Set("Content-Type", "application/json")
 	w2 := httptest.NewRecorder()
 	r.ServeHTTP(w2, req2)
-	assert.Equal(t, 500, w2.Code)
+	assert.Equal(t, 400, w2.Code)	
 
 	//missing parameter
 	payload2 := model.User{Password: "pass"}
@@ -61,11 +81,20 @@ func TestAddUser(t *testing.T) {
 	w3 := httptest.NewRecorder()
 	r.ServeHTTP(w3, req3)
 	assert.Equal(t, 400, w3.Code)
+
+	//invalid email
+	payload3 := model.User{Email: "hello"}
+	data3, _ := json.Marshal(payload3)
+	req4, _ := http.NewRequest("POST", "/api/add", bytes.NewBuffer(data3))
+	req4.Header.Set("Content-Type", "application/json")
+	w4 := httptest.NewRecorder()
+	r.ServeHTTP(w4, req4)
+	assert.Equal(t, 400, w2.Code)
 }
 
 func TestGetUser(t *testing.T) {
 	users := []model.User{
-		{ID: 1, Email: "testget@gmail.com", Password: "pass"},
+		{ID: 1, Email: "testget@gmail.com", Password: "pass"}, //not using hashed password as that was already tested in beforehand test case
 	}
 	r := setupRouter(&users)
 
